@@ -7,19 +7,24 @@ import wave
 import os
 from openai import OpenAI
 import tempfile
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_core.chat_history import InMemoryChatMessageHistory,BaseChatMessageHistory
 import base64
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.chat_message_histories import UpstashRedisChatMessageHistory
-
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from langchain_community.chat_message_histories import UpstashRedisChatMessageHistory
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 
-from utils.tools import book_appointment, check_available_slots
+import faiss
+
+from langchain_community.docstore import InMemoryDocstore
+from langchain_community.vectorstores import FAISS
+from langchain.memory import VectorStoreRetrieverMemory
+from langchain_openai import OpenAIEmbeddings
+
+
+from utils.tools import book_appointment
+
+from langchain.tools.retriever import create_retriever_tool
 
 
 
@@ -51,8 +56,6 @@ def get_session_history(session_id: str):
 
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-
 prompt = ChatPromptTemplate.from_messages([
     ("system", """You are Azodha, an intelligent virtual assistant for a healthcare appointment booking application. Your primary functions are to:
 
@@ -78,8 +81,25 @@ Your role is to facilitate connections between patients and healthcare providers
 
 chain = prompt | llm
 
+embedding_size = 1536  # Dimensions of the OpenAIEmbeddings
+index = faiss.IndexFlatL2(embedding_size)
+embedding_fn = OpenAIEmbeddings().embed_query
+vectorstore = FAISS(embedding_fn, index, InMemoryDocstore({}), {})
+
+
+retriever = vectorstore.as_retriever(search_kwargs=dict(k=1))
+# memory = VectorStoreRetrieverMemory(retriever=retriever)
+
+tool = create_retriever_tool(
+    retriever,
+    "convert_response_to_vector",
+    "this tool is used when you call another tools but the context token for them is a lot, so first you convert it to vector and then use it!.",
+)
+
 # Initialize tools
-tools = [book_appointment, check_available_slots]
+tools = [book_appointment, tool]
+
+
 
 # Create tool calling agent
 agent = create_tool_calling_agent(llm, tools, prompt)
