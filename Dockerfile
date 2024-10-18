@@ -25,4 +25,5 @@ EXPOSE 8501
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Command to run the Streamlit app
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# ... existing code ...
+CMD ["streamlit", "run", "app.py", "--server.port=$PORT", "--server.address=0.0.0.0"]
